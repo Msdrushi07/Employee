@@ -1,0 +1,87 @@
+package com.employee.service;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.employee.dtos.EmployeeDto;
+import com.employee.exception.EmployeeAlreadyExist;
+import com.employee.model.Employee;
+import com.employee.repository.EmployeeRepository;
+
+@Service
+public class EmployeeServiceImpl implements EmployeeService {
+
+	@Autowired
+	private EmployeeRepository empRepository;
+	
+	@Autowired
+	private ModelMapper modelMapper;
+
+	@Override
+	public String saveEmployee(EmployeeDto employeeDto) throws EmployeeAlreadyExist {
+		Employee employee= modelMapper.map(employeeDto, Employee.class);
+		Employee emp = empRepository.findByEmpId(employee.getEmpId());
+		if(emp != null) {
+			throw new EmployeeAlreadyExist("employee already exist with employee id :"+emp.getEmpId());
+		}
+		empRepository.save(employee);
+		return "employee saved successfully with id :" + employee.getEmpId();
+	}
+
+	@Override
+	public String saveListOfEmployee(List<EmployeeDto> employeeDto) {
+		Employee[] emploee=modelMapper.map(employeeDto,Employee[].class);
+		List<Employee> employees=Arrays.asList(emploee);
+		empRepository.saveAll(employees);
+		return "saved all employees";
+	}
+
+	@Override
+	public List<Employee> findAllEmployee() {
+		return empRepository.findAll();
+	}
+
+	@Override
+	public Employee findByEmpId(String empid) {
+		return empRepository.findByEmpId(empid);
+	}
+
+	@Override
+	public Employee findEmpByName(String name) {
+		return empRepository.findByName(name);
+	}
+
+	@Override
+	public Employee findEmpByNameAndSalary(String name, String salary) {
+		return empRepository.findByNameAndSallary(name, salary);
+	}
+
+	@Override
+	public String updateEmployee(String empId, Employee employee) {
+		Employee emp = empRepository.findByEmpId(empId);
+		emp.setName(employee.getName());
+		emp.setAge(employee.getAge());
+		emp.setSallary(employee.getSallary());
+		empRepository.save(emp);
+		return "updated the employee details";
+	}
+
+	@Override
+	public String deleteEmpById(int id) {
+		empRepository.deleteById(id);
+		return "employee deleted successfully";
+	}
+
+	@Override
+	@Transactional
+	public String deleteEmployeeByName(String name) {
+		empRepository.deleteByName(name);
+		return "employee deleted with name :" + name;
+	}
+
+}
