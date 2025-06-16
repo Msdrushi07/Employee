@@ -36,10 +36,14 @@ public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		http.csrf().disable()
-				.authorizeHttpRequests(auth -> auth.antMatchers("/h2-console/**").permitAll().antMatchers("/employee/**")
+				.authorizeHttpRequests(auth -> auth.antMatchers("/h2-console/**").permitAll().antMatchers("/employee/**").hasAnyRole("EMPLOYEE")
+				.antMatchers("/admin/**").hasAnyRole("ADMIN").anyRequest()
 				.authenticated())
 				.formLogin(Customizer.withDefaults()).httpBasic(Customizer.withDefaults());
 		return http.build();
+
+		
+	//	.antMatchers("/hr/**").hasAnyRole("HR", "ADMIN")
 
 	}
 

@@ -1,8 +1,10 @@
 package com.employee.security;
 
 import java.util.Collection;
+import java.util.List;
 
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import com.employee.model.Employee;
@@ -20,9 +22,17 @@ public class CustomUserDetails implements UserDetails{
 
 	@Override
 	public Collection<? extends GrantedAuthority> getAuthorities() {
-		// TODO Auto-generated method stub
-		return null;
+	    return List.of(new SimpleGrantedAuthority(employee.getRole()));
 	}
+// If multiple roles are present then use below	
+//	@Override
+//	public Collection<? extends GrantedAuthority> getAuthorities() {
+//	    return employee.getRoles().stream()
+//	        .map(role -> new SimpleGrantedAuthority(role.getName()))
+//	        .collect(Collectors.toList());
+//	}
+
+
 
 	@Override
 	public String getPassword() {
