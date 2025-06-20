@@ -15,6 +15,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import com.employee.filter.JwtFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -33,6 +36,9 @@ public class SecurityConfig {
 	@Autowired
 	private UserDetailsService userDetailService;
 	
+	@Autowired
+	private JwtFilter jwtFilter;
+	
 	@Bean
 	public PasswordEncoder noPasswordEncoder() {
 		return NoOpPasswordEncoder.getInstance();
@@ -46,10 +52,11 @@ public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		http.csrf().disable()
-				.authorizeHttpRequests(auth -> auth.antMatchers("/h2-console/**,/auth/**").permitAll().antMatchers("/employee/**").hasAnyRole("EMPLOYEE")
+				.authorizeHttpRequests(auth -> auth.antMatchers("/h2-console/**", "/auth/**").permitAll().antMatchers("/employee/**").hasAnyRole("EMPLOYEE")
 				.antMatchers("/admin/**").hasAnyRole("ADMIN").anyRequest()
 				.authenticated())
-				.formLogin(Customizer.withDefaults()).httpBasic(Customizer.withDefaults());
+				.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);     // custom filter
+	//			.formLogin(Customizer.withDefaults()).httpBasic(Customizer.withDefaults());
 		return http.build();
 
 		

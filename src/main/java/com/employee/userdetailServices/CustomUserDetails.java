@@ -1,4 +1,4 @@
-package com.employee.security;
+package com.employee.userdetailServices;
 
 import java.util.Collection;
 import java.util.List;
@@ -10,8 +10,10 @@ import org.springframework.security.core.userdetails.UserDetails;
 import com.employee.model.Employee;
 
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 @Data
+@Slf4j
 public class CustomUserDetails implements UserDetails{
 	
 	private Employee employee;
@@ -22,6 +24,7 @@ public class CustomUserDetails implements UserDetails{
 
 	@Override
 	public Collection<? extends GrantedAuthority> getAuthorities() {
+		log.info(employee.getRole());
 	    return List.of(new SimpleGrantedAuthority(employee.getRole()));
 	}
 // If multiple roles are present then use below	
