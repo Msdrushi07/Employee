@@ -60,7 +60,7 @@ public class SecurityConfig {
 		return http.build();
 
 		
-	//	.antMatchers("/hr/**").hasAnyRole("HR", "ADMIN")
+	//	.antMatchers("/hr/**", "/manager/**").hasAnyRole("HR", "ADMIN")
 
 	}
 
