@@ -10,6 +10,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.NoOpPasswordEncoder;
@@ -51,16 +52,19 @@ public class SecurityConfig {
 
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-		http.csrf().disable()
+		    http.csrf(csrf -> csrf.disable())
+				.sessionManagement(session -> session
+				.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Stateless session
 				.authorizeHttpRequests(auth -> auth.antMatchers("/h2-console/**", "/auth/**").permitAll().antMatchers("/employee/**").hasAnyRole("EMPLOYEE")
-				.antMatchers("/admin/**").hasAnyRole("ADMIN").anyRequest()
+				.antMatchers("/admin/**").hasAnyRole("ADMIN").anyRequest()  // has role expect ROLE_USER or ROLE_ADMIN while fetching data from database
 				.authenticated())
 				.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);     // custom filter
-	//			.formLogin(Customizer.withDefaults()).httpBasic(Customizer.withDefaults());
+	//			.formLogin(Customizer.withDefaults()).httpBasic(Customizer.withDefaults()); 
+		    // normal form login which internally implements UsernamePasswordAuthenticationFilter
 		return http.build();
-
 		
 	//	.antMatchers("/hr/**", "/manager/**").hasAnyRole("HR", "ADMIN")
+    // if using form login then do not use statess, if using jwt then use stateless to treat every request same or new as new request
 
 	}
 
@@ -76,4 +80,6 @@ public class SecurityConfig {
 	    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
 	        return config.getAuthenticationManager();
 	    }
+	    
+
 }

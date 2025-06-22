@@ -1,8 +1,11 @@
 package com.employee.jwt;
 
 import java.security.Key;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -31,6 +34,8 @@ public class jwtService {
 		Map<String, Object> claims = new HashMap<>();
 		claims.put("user data as a payload key", "value");
 		claims.put("sub","token provider");
+		claims.put("roles",new ArrayList<>(Arrays.asList("ROLE_USER","ROLE_ADMIN")));
+		claims.put("fixed_roles",List.of("ROLE_USER","ROLE_ADMIN"));
 		return createToken(claims, userName);
 	}
 
@@ -42,7 +47,7 @@ public class jwtService {
 				.setClaims(claims)
 				.setSubject(userName).
 				setIssuedAt(new Date(System.currentTimeMillis()))
-				.setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 30))
+				.setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 30)) // 30 min
 				.signWith(getSignKey(), SignatureAlgorithm.HS256).compact();
 	}
 
@@ -63,6 +68,8 @@ public class jwtService {
 
 	public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
 		final Claims claims = extractAllClaims(token);
+	//	String[] res=claims.get("roles",String[].class);
+	//	List<String> list=Arrays.asList(res);
 		return claimsResolver.apply(claims);
 	}
 
