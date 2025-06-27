@@ -1,6 +1,7 @@
 package com.employee.service;
 
 import java.util.Arrays;
+
 import java.util.List;
 
 import org.modelmapper.ModelMapper;
@@ -12,6 +13,8 @@ import com.employee.dtos.EmployeeDto;
 import com.employee.exception.EmployeeAlreadyExist;
 import com.employee.model.Employee;
 import com.employee.repository.EmployeeRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class EmployeeServiceImpl implements EmployeeService {
@@ -21,6 +24,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 	
 	@Autowired
 	private ModelMapper modelMapper;
+	
+	private ObjectMapper objectMapper = new ObjectMapper();
 
 	@Override
 	public String saveEmployee(EmployeeDto employeeDto) throws EmployeeAlreadyExist {
@@ -83,5 +88,24 @@ public class EmployeeServiceImpl implements EmployeeService {
 		empRepository.deleteByName(name);
 		return "employee deleted with name :" + name;
 	}
+	
+	public void objectMapperMethods() throws JsonProcessingException {
+	// converting json string to Employee object need to take care datatype,variable name,setter getter, all args and no args constructor mandatory
+		String json=jsonEmployeeData();
+		Employee emp = objectMapper.readValue(json,Employee.class);
 
+	// converting employee object to json string
+		String empJson = objectMapper.writeValueAsString(emp);
+		
+	}
+	
+	public String jsonEmployeeData() {
+		return "{\r\n"
+				+ "   \"empId\": \"23566\",\r\n"
+				+ "    \"name\":\"rashh\",\r\n"
+				+ "    \"age\":\"25\",\r\n"
+				+ "    \"sallary\":\"100000\"\r\n"
+				+ "}";
+	}
+	
 }
