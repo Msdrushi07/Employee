@@ -10,7 +10,11 @@ steps
 
 swagger
 Using Open API defination
-1 add dependecy
+1 add dependecy <dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-ui</artifactId>
+    <version>1.7.0</version>
+</dependency>
 2 try to access http://localhost:8081/swagger-ui/index.html
                 http://localhost:8081/swagger-ui.html
                 http://localhost:8081/v3/api-docs
