@@ -37,7 +37,9 @@ public class JwtFilter extends OncePerRequestFilter {
         "/public/**",
         "/health",
         "/swagger-ui/**",
-        "/v3/api-docs/**"
+        "/v3/api-docs/**",
+        "/swagger-ui.html",
+        "/v3/api-docs.yaml", 
     };
 
     @Override

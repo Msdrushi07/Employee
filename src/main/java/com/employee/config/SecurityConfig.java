@@ -55,7 +55,8 @@ public class SecurityConfig {
 		    http.csrf(csrf -> csrf.disable())
 				.sessionManagement(session -> session
 				.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Stateless session
-				.authorizeHttpRequests(auth -> auth.antMatchers("/h2-console/**", "/auth/**").permitAll().antMatchers("/employee/**").hasAnyRole("EMPLOYEE")
+				.authorizeHttpRequests(auth -> auth.antMatchers("/h2-console/**", "/auth/**","/swagger-ui/**", "/swagger-ui.html","/v3/api-docs/**","/v3/api-docs.yaml")
+						.permitAll().antMatchers("/employee/**").hasAnyRole("EMPLOYEE")
 				.antMatchers("/admin/**").hasAnyRole("ADMIN").anyRequest()  // has role expect ROLE_USER or ROLE_ADMIN while fetching data from database
 				.authenticated())
 				.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);     // custom filter
