@@ -1,0 +1,269 @@
+Spring Boot Actuator + Micrometer
+1️⃣ Add Dependencies in pom.xml
+<!-- Spring Boot Actuator -->
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+
+<!-- Micrometer Prometheus Registry -->
+<dependency>
+  <groupId>io.micrometer</groupId>
+  <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+
+2️⃣ Update application.yml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+3️⃣ Run Your App and Test
+✅ http://localhost:8080/actuator/health → Basic health
+
+✅ http://localhost:8080/actuator/metrics → All available metrics
+
+✅ http://localhost:8080/actuator/prometheus → Prometheus-friendly metrics format
+
+Prometheus Integration
+ 1. Download Prometheus
+Go to the official site and download the binary for your OS
+
+✅ 2. Create/Edit Prometheus Config File
+global:
+  scrape_interval: 15s  # How often to scrape metrics
+
+scrape_configs:
+  - job_name: 'spring-boot-app'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['localhost:8080']  # Update if your Spring Boot runs on a different port
+
+✅ 3. Run Prometheus
+./prometheus --config.file=prometheus.yml
+
+You should see logs like:
+level=info msg="Server is ready to receive web requests."
+
+4️⃣ Open Prometheus in Browser
+http://localhost:9090
+
+5️⃣ Verify Your Spring Boot App is Scraped
+http://localhost:9090/targets
+
+You should see spring-boot-app listed and status: UP
+
+Grafana Setup + Dashboards
+✅ 1. Download & Install Grafana
+Go to: 👉 https://grafana.com/grafana/download
+
+Download the Windows Installer
+
+Run the installer (it will create a Grafana service)
+
+Once installed, Grafana runs on:
+
+🌐 http://localhost:3000
+
+✅ 3. Add Prometheus as a Data Source
+In the left sidebar, go to ⚙️ → Data Sources
+
+Click "Add data source"
+
+Choose Prometheus
+Set the URL as:
+http://localhost:9090
+
+Click Save & Test
+✅ “Data source is working”
+
+✅ 4. Import Prebuilt Dashboards (Optional but Recommended)
+Click on the + icon → Import
+
+Use a popular Prometheus dashboard ID like:
+4701  or 7587
+
+Set Prometheus as the data source when prompted
+
+Click Import
+
+Logging with ELK Stack
+✅ Option: Use Dockerized ELK Stack
+✅ 2. Use Prebuilt ELK Stack with Docker Compose
+Create a file:
+📄 docker-compose.yml in a new folder, and paste:
+version: '3.7'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    networks:
+      - elk
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.9
+    container_name: logstash
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    networks:
+      - elk
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.9
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    networks:
+      - elk
+
+networks:
+  elk:
+    driver: bridge
+
+
+✅ 3. Create a logstash.conf file (same folder)
+📄 logstash.conf
+input {
+  tcp {
+    port => 5000
+    codec => json
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["http://elasticsearch:9200"]
+    index => "springboot-logs"
+  }
+  stdout { codec => rubydebug }
+}
+
+✅ 4. Start the ELK Stack
+From the folder where your docker-compose.yml is:
+docker-compose up -d
+✔ This runs:
+
+Elasticsearch on http://localhost:9200
+
+Kibana on http://localhost:5601
+
+Logstash listening on port 5000 for logs
+
+http://localhost:9200/_cat - to check indices
+
+✅ 5. Configure Spring Boot to Send Logs to Logstash
+➕ Add dependency in pom.xml
+<dependency>
+    <groupId>net.logstash.logback</groupId>
+    <artifactId>logstash-logback-encoder</artifactId>
+    <version>6.6</version> for spring boot 3.x 7.4
+</dependency>
+
+ Update application.yml
+logging:
+  level:
+    root: INFO
+  logstash:
+    enabled: true
+
+---
+
+logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+---
+
+spring:
+  application:
+    name: my-microservice
+
+Add logback-spring.xml (in src/main/resources)
+<configuration>
+  <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+    <destination>localhost:5000</destination>
+    
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder" />
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="LOGSTASH"/>
+  </root>
+</configuration>
+
+
+
+
+✅ 7. View Logs in Kibana
+Visit:
+
+http://localhost:5601
+
+Click:
+
+"Stack Management → kibana -> Index Patterns"
+
+Create a new index pattern:
+springboot-logs*
+Select @timestamp as time filter field
+Now go to Discover tab — and boom 💥 your live logs are there, searchable and filterable!
+
+Zipkin + Spring Cloud Sleuth for distributed tracing
+Step 1: Add Dependencies
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-zipkin</artifactId>
+</dependency>
+
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-sleuth</artifactId>
+</dependency>
+
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-dependencies</artifactId>
+      <version>2021.0.8</version> <!-- Compatible with Spring Boot 2.7.x -->
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+
+if gets error for zipkin
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-zipkin</artifactId>
+  <version>2.2.8.RELEASE</version> <!-- Matches 2021.0.8 BOM -->
+</dependency>
+
+ Step 2: Configure application.yml or application.properties
+spring:
+  zipkin:
+    base-url: http://localhost:9411
+    enabled: true
+    sender:
+      type: web
+  sleuth:
+    sampler:
+      probability: 1.0  # Trace 100% of requests
+
+ Step 3: Run Zipkin via Docker
+docker run -d -p 9411:9411 openzipkin/zipkin
+
+Run your app, hit http://localhost:8080/hello, and then check the trace in the Zipkin UI.

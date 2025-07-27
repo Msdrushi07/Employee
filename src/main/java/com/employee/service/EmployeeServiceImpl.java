@@ -16,7 +16,10 @@ import com.employee.repository.EmployeeRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Service
+@Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
 
 	@Autowired
@@ -29,7 +32,9 @@ public class EmployeeServiceImpl implements EmployeeService {
 
 	@Override
 	public String saveEmployee(EmployeeDto employeeDto) throws EmployeeAlreadyExist {
+		log.info("inside save employee service");
 		Employee employee= modelMapper.map(employeeDto, Employee.class);
+		log.info("converted the employee dto to employee object");
 		Employee emp = empRepository.findByEmpId(employee.getEmpId());
 		if(emp != null) {
 			throw new EmployeeAlreadyExist("employee already exist with employee id :"+emp.getEmpId());

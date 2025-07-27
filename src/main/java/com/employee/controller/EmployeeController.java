@@ -34,10 +34,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
 
 @Tag(name = "Employee APIs", description = "Employee operation")
 @RestController
 @RequestMapping("/employee")
+@Slf4j
 public class EmployeeController {
 
 	@Autowired
@@ -51,6 +53,7 @@ public class EmployeeController {
 	@SecurityRequirement(name = "bearerAuth") // Secures only this endpoint
 	@PostMapping
 	public ResponseEntity<String> saveEmplyee(@Valid @RequestBody EmployeeDto employeeDto) throws EmployeeAlreadyExist {
+		log.info("inside save employee controller");
 		String res = empService.saveEmployee(employeeDto);
 		return new ResponseEntity<>(res, HttpStatus.CREATED);
 	}
@@ -60,6 +63,7 @@ public class EmployeeController {
 			@ExampleObject(name = "User Example", value = "{ \"id\": 1, \"name\": \"John Doe\", \"email\": \"john@example.com\" }") }))
 	@PostMapping("/saveAll")
 	public ResponseEntity<String> saveListOFEmployees(@RequestBody List<EmployeeDto> employeesDto) {
+		log.info("inside save employee list controller");
 		String res = empService.saveListOfEmployee(employeesDto);
 		return ResponseEntity.status(HttpStatus.OK).body(res);
 	}
@@ -67,6 +71,7 @@ public class EmployeeController {
 	@PreAuthorize("hasRole('EMPLOYEE')")
 	@GetMapping
 	public ResponseEntity<List<Employee>> findAllEmpoyees() {
+		log.info("inside find all employee controller");
 		List<Employee> res = empService.findAllEmployee();
 		return new ResponseEntity<>(res, HttpStatus.OK);
 	}

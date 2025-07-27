@@ -40,6 +40,7 @@ public class JwtFilter extends OncePerRequestFilter {
         "/v3/api-docs/**",
         "/swagger-ui.html",
         "/v3/api-docs.yaml", 
+        "/actuator/**",
     };
 
     @Override

@@ -45,6 +45,7 @@ public class AuthController {
 	
 	@GetMapping
 	public String getName() {
+		log.info("test the loggers with  id 07");
 		return "rushi";
 	}
 	
