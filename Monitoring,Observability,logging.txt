@@ -221,7 +221,14 @@ springboot-logs*
 Select @timestamp as time filter field
 Now go to Discover tab — and boom 💥 your live logs are there, searchable and filterable!
 
+8. 📈 Filtering logs in kibana 
+correlationId: "abc-123"
+message:"test the logger"
+
+
+
 Zipkin + Spring Cloud Sleuth for distributed tracing
+
 Step 1: Add Dependencies
 <dependency>
   <groupId>org.springframework.cloud</groupId>
@@ -267,6 +274,7 @@ spring:
 docker run -d -p 9411:9411 openzipkin/zipkin
 
 Run your app, hit http://localhost:8080/hello, and then check the trace in the Zipkin UI.
+for every request it will bind trace Id and Span id
 
 
 Prometheus Alertmanager with Slack/Email Alerting
@@ -481,5 +489,73 @@ You'll get a 16-character app password like: abcd efgh ijkl mnop
 
 💡 Save it somewhere. This is what you'll use in the next step as your smtp_auth_password.
 
+MDC CorRelationid
+import java.io.IOException;
+import java.util.UUID;
+import javax.servlet.Filter;
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
+import org.slf4j.MDC;
+import org.springframework.stereotype.Component;
+
+@Component
+public class CorrelationIdFilter implements Filter {
+
+	private static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
+	private static final String MDC_CORRELATION_ID_KEY = "correlationId";
+
+	@Override
+	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+			throws IOException, ServletException {
+
+		HttpServletRequest httpRequest = (HttpServletRequest) request;
+		HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+		String correlationId = httpRequest.getHeader(CORRELATION_ID_HEADER);
+		if (correlationId == null || correlationId.isEmpty()) {
+			correlationId = UUID.randomUUID().toString(); // Generate if not present
+		}
+
+		MDC.put(MDC_CORRELATION_ID_KEY, correlationId);
+		httpResponse.setHeader(CORRELATION_ID_HEADER, correlationId); // Add to response
+
+		try {
+			chain.doFilter(request, response);
+		} finally {
+			MDC.remove(MDC_CORRELATION_ID_KEY); // Avoid memory leak
+		}
+	}
+}
+
+
+1. 🧭 Trace a request across services
+Let’s say you have multiple services:
+
+API Gateway → Service A → Service B → DB
+
+You can pass the same X-Correlation-Id in headers across services.
+
+So if:
+
+A client calls the gateway with X-Correlation-Id: abc-123
+
+Gateway passes this ID to Service A
+
+Service A logs with that ID and passes it to Service B
+
+Now all logs across services have the same correlation ID
+
+✅ You can search this ID in ELK logs or trace requests in Zipkin with the same ID to track the full journey.
+
+Platform	Can Filter by Correlation ID?	Notes
+Kibana	✅ Yes	Just include it in logs
+Grafana	❌ No (Unless using Loki)	Grafana = metrics, Loki = logs
+Grafana + Loki	✅ Yes	Full-text search like ELK
+Zipkin	✅ Yes (via traceId)	Correlation ID → traceId
+Prometheus	❌ No	Works with metrics, not logs
 
