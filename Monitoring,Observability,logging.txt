@@ -267,3 +267,219 @@ spring:
 docker run -d -p 9411:9411 openzipkin/zipkin
 
 Run your app, hit http://localhost:8080/hello, and then check the trace in the Zipkin UI.
+
+
+Prometheus Alertmanager with Slack/Email Alerting
+1. Create the alert-rules.yml file
+This file defines the alert conditions.
+Save it in the same directory as prometheus.yml:  (if docker is using)
+groups:
+  - name: spring-boot-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_server_requests_seconds_count{status=~"5.."}[1m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx Error Rate"
+          description: "More than 0 5xx errors in the last 1 minute"
+
+2. Update prometheus.yml to include rule and Alertmanager
+rule_files:
+  - "alert-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+3. Create alertmanager.yml for Slack integration
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'slack-notifications'
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
+
+receivers:
+  - name: 'slack-notifications'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/your/webhook/url'
+        channel: '#your-channel-name'     // '#alerts'
+        send_resolved: true
+
+Replace the api_url with your actual Slack Incoming Webhook URL.
+
+4. Update docker-compose.yml to add Alertmanager
+Add this service to your docker-compose.yml
+  alertmanager:
+    image: prom/alertmanager
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    networks:
+      - elk  # or your common network
+5. Restart Docker Compose
+docker-compose down
+docker-compose up -d
+
+6. Test Alert
+Cause a 5xx error in your Spring Boot app and check:
+
+Slack channel for alert
+
+Alertmanager UI: http://localhost:9093
+
+Prometheus UI: http://localhost:9090/alerts
+
+Prometheus Alertmanager + Slack on Windows (Non-Docker Setup)
+ Folder Structure (Recommended)
+Place everything inside your Prometheus folder (or organized neatly):
+prometheus-3.5.0.windows-amd64/
+├── prometheus.yml
+├── alert-rules.yml
+├── alertmanager/
+│   ├── alertmanager.exe
+│   ├── alertmanager.yml
+│   └── data/
+
+Step 1: Download Alertmanager for Windows
+Go to: https://prometheus.io/download/#alertmanager
+
+Download the Windows .zip for alertmanager.
+
+Extract it, and place the folder like this:
+prometheus-3.5.0.windows-amd64/
+└── alertmanager/
+    ├── alertmanager.exe
+    └── alertmanager.yml
+
+Step 5: Start Alertmanager
+cd path\to\prometheus-3.5.0.windows-amd64\alertmanager
+alertmanager.exe --config.file=alertmanager.yml
+It will start on: http://localhost:9093
+
+Step 6: Start Prometheus (with new config)
+In another Command Prompt:
+cd path\to\prometheus-3.5.0.windows-amd64
+prometheus.exe --config.file=prometheus.yml
+
+Step 7: Trigger an Alert
+Try forcing a 5xx error in your Spring Boot app (e.g., throw exception), then:
+
+Visit: http://localhost:9090/alerts
+
+Check Slack for notification
+
+Visit: http://localhost:9093 (Alertmanager UI)
+
+
+Email Alerts
+alertmanager.yml
+
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'your.email@gmail.com'
+  smtp_auth_username: 'your.email@gmail.com'
+  smtp_auth_password: 'your-app-password'   # App password, not your Gmail login
+  smtp_require_tls: true
+
+route:
+  receiver: 'email-notifications'
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
+
+receivers:
+  - name: 'email-notifications'
+    email_configs:
+      - to: 'recipient.email@example.com'
+        send_resolved: true
+
+mportant:
+Gmail no longer supports less secure apps. You must create an App Password:
+
+Go to https://myaccount.google.com/apppasswords
+
+Select Mail and Windows Computer
+
+Copy the 16-character password and use it as smtp_auth_password
+
+alert-rules.yml
+route:
+  receiver: 'email-notifications'
+
+  routes:
+    - match:
+        alertname: "HighMemoryUsage"
+      receiver: "email-notifications"
+
+Run Prometheus again:
+./prometheus --config.file=prometheus.yml
+
+Watch Alertmanager UI at:
+http://localhost:9093
+
+Check your Slack channel — you should get an alert within 10–15 seconds if everything’s wired correctly.
+
+Now, let's proceed with Email alerting via SMTP using Alertmanager.
+We’ll go step by step to:
+
+Set up SMTP email in alertmanager.yml
+
+Use the same alerting rule (for now)
+
+Test it
+
+Update alertmanager.yml
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'your-email@gmail.com'
+  smtp_auth_username: 'your-email@gmail.com'
+  smtp_auth_password: 'your-app-password'  # not your Gmail password!
+  smtp_require_tls: true
+
+route:
+  receiver: 'email-alert'
+
+receivers:
+  - name: 'email-alert'
+    email_configs:
+      - to: 'recipient-email@gmail.com'
+        send_resolved: true
+Important Notes:
+🔐 Use App Password for Gmail. If you're using Gmail, enable 2FA and create an App Password (select "Mail" → "Windows Computer").
+
+🛡️ Never use your main email password — always use app-specific passwords.
+
+📥 smtp_from = sender email, to = receiver email.
+
+relaunch the binary with the updated file:
+./alertmanager --config.file=alertmanager.yml
+
+Testing
+Step 1: Get a Gmail App Password
+If you're using Gmail, do this:
+
+Go to 👉 https://myaccount.google.com/apppasswords
+
+Log in with your Gmail account.
+
+Under "Select App", choose Mail.
+
+Under "Select Device", choose Other, name it something like "PrometheusAlertManager".
+
+Click Generate.
+
+You'll get a 16-character app password like: abcd efgh ijkl mnop
+
+💡 Save it somewhere. This is what you'll use in the next step as your smtp_auth_password.
+
+
+
