@@ -7,6 +7,9 @@ env:
     DOCKER_HUB_REPO: your-dockerhub-username/springboot-app
   secrets-manager:
     DOCKER_HUB_PASS: dockerhub/credentials:password   # Store in Secrets Manager
+    // here Docker_HUB_Pass name of the variable exposed to container we can use it in below configuration 
+    // dockerhub/credentials is name of secret
+    // passowrd is the key
     SONAR_TOKEN: sonarqube/credentials:token          # Store SonarQube token in Secrets Manager
 
 phases:
