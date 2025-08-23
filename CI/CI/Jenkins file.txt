@@ -168,5 +168,145 @@ spec:
 ---
 
 
+Jenkinsfile (Dual Push: DockerHub + ECR)
+
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME       = "springboot-app"
+        DOCKER_HUB_REPO  = "your-dockerhub-username/springboot-app"
+        ECR_REPO         = "123456789012.dkr.ecr.us-east-1.amazonaws.com/springboot-app"
+        AWS_REGION       = "us-east-1"
+        SONAR_TOKEN      = credentials('sonar-token')
+    }
+
+    stages {
+        stage('Install Tools') {
+            steps {
+                sh '''
+                  mvn -v
+                  java -version
+                  docker -v
+                  aws --version
+                  kubectl version --client
+                '''
+            }
+        }
+
+        stage('Pre-Build: Tests & Sonar') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                  usernameVariable: 'DH_USER',
+                                                  passwordVariable: 'DH_PASS')]) {
+                    sh 'echo $DH_PASS | docker login -u $DH_USER --password-stdin'
+                }
+                sh '''
+                  mvn clean verify
+                  mvn sonar:sonar -Dsonar.projectKey=springboot-app \
+                                  -Dsonar.host.url=https://sonarcloud.io \
+                                  -Dsonar.login=$SONAR_TOKEN
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                  mvn clean package -DskipTests
+                  docker build -t $IMAGE_NAME:$BUILD_NUMBER .
+                  
+                  # Tag for DockerHub
+                  docker tag $IMAGE_NAME:$BUILD_NUMBER $DOCKER_HUB_REPO:$BUILD_NUMBER
+                  docker tag $IMAGE_NAME:$BUILD_NUMBER $DOCKER_HUB_REPO:latest
+
+                  # Tag for ECR
+                  docker tag $IMAGE_NAME:$BUILD_NUMBER $ECR_REPO:$BUILD_NUMBER
+                  docker tag $IMAGE_NAME:$BUILD_NUMBER $ECR_REPO:latest
+                '''
+            }
+        }
+
+        stage('Push Images') {
+            steps {
+                // Push to DockerHub
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                  usernameVariable: 'DH_USER',
+                                                  passwordVariable: 'DH_PASS')]) {
+                    sh '''
+                      echo $DH_PASS | docker login -u $DH_USER --password-stdin
+                      docker push $DOCKER_HUB_REPO:$BUILD_NUMBER
+                      docker push $DOCKER_HUB_REPO:latest
+                    '''
+                }
+
+                // Push to ECR
+                sh '''
+                  aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin 123456789012.dkr.ecr.$AWS_REGION.amazonaws.com
+                  docker push $ECR_REPO:$BUILD_NUMBER
+                  docker push $ECR_REPO:latest
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                sh '''
+                  aws eks update-kubeconfig --region $AWS_REGION --name my-eks-cluster
+                  sed -i "s|image:.*|image: $ECR_REPO:$BUILD_NUMBER|" k8s/deployment.yaml
+                  kubectl apply -f k8s/deployment.yaml
+                  kubectl rollout status deployment/springboot-app
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            echo "✅ CI/CD pipeline completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed! Check logs."
+        }
+    }
+}
+
+
+---
+
+🔑 Notes
+
+1. Dual registry push
+
+DockerHub: docker tag + docker push
+
+ECR: docker tag + docker push after aws ecr get-login-password
+
+
+
+2. Deployment
+
+The manifest uses the ECR image for production.
+
+If needed, you could parameterize it to choose DockerHub or ECR for deploy.
+
+
+
+3. Automation
+
+$BUILD_NUMBER is used as the image tag for both registries.
+
+Latest tag is also updated for convenience.
+
+
+
+
+
+---
+
+✅ Now your pipeline is flexible: pushes images to both DockerHub and ECR and deploys to EKS.
+
+
 
 
