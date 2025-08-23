@@ -1,0 +1,172 @@
+Perfect 👍 Let’s extend your Jenkinsfile so it does full CI/CD:
+
+1. Build + Push image to DockerHub (done ✅)
+
+
+2. Deploy to EKS (new stage)
+
+
+
+
+---
+
+🚀 Final Jenkinsfile (CI + CD to EKS)
+
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME       = "springboot-app"
+        DOCKER_HUB_REPO  = "your-dockerhub-username/springboot-app"
+        SONAR_TOKEN      = credentials('sonar-token')       // SonarQube token (Secret Text in Jenkins)
+    }
+
+    stages {
+        stage('Install Tools') {
+            steps {
+                sh '''
+                  echo "Checking versions..."
+                  mvn -v
+                  java -version
+                  docker -v
+                  aws --version
+                  kubectl version --client
+                '''
+            }
+        }
+
+        stage('Pre-Build: Tests & Sonar') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                  usernameVariable: 'DH_USER',
+                                                  passwordVariable: 'DH_PASS')]) {
+                    sh '''
+                      echo "Logging in to Docker Hub..."
+                      echo $DH_PASS | docker login -u $DH_USER --password-stdin
+                    '''
+                }
+                sh '''
+                  echo "Running Unit Tests..."
+                  mvn clean verify
+
+                  echo "Running SonarQube Analysis..."
+                  mvn sonar:sonar \
+                    -Dsonar.projectKey=springboot-app \
+                    -Dsonar.host.url=https://sonarcloud.io \
+                    -Dsonar.login=$SONAR_TOKEN
+                '''
+            }
+        }
+
+        stage('Build App & Docker Image') {
+            steps {
+                sh '''
+                  echo "Building JAR..."
+                  mvn clean package -DskipTests
+
+                  echo "Building Docker Image..."
+                  docker build -t $DOCKER_HUB_REPO:$BUILD_NUMBER .
+                  docker tag $DOCKER_HUB_REPO:$BUILD_NUMBER $DOCKER_HUB_REPO:latest
+                '''
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                sh '''
+                  echo "Pushing Docker Images..."
+                  docker push $DOCKER_HUB_REPO:$BUILD_NUMBER
+                  docker push $DOCKER_HUB_REPO:latest
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                sh '''
+                  echo "Updating kubeconfig..."
+                  aws eks update-kubeconfig --region us-east-1 --name my-eks-cluster
+
+                  echo "Updating Deployment manifest..."
+                  sed -i "s|image:.*|image: $DOCKER_HUB_REPO:$BUILD_NUMBER|" k8s/deployment.yaml
+                  cat k8s/deployment.yaml
+
+                  echo "Deploying to EKS..."
+                  kubectl apply -f k8s/deployment.yaml
+
+                  echo "Waiting for rollout..."
+                  kubectl rollout status deployment/springboot-app
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            echo "✅ CI/CD pipeline completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed! Check logs."
+        }
+    }
+}
+
+
+---
+
+🔑 Key Notes
+
+1. DockerHub credentials
+
+Create Jenkins Credential ID dockerhub-creds (Username + Password).
+
+
+
+2. SonarQube Token
+
+Create Jenkins Credential ID sonar-token (Secret Text).
+
+
+
+3. AWS access for EKS
+
+Jenkins node/agent must have AWS CLI installed.
+
+Configure IAM role or Jenkins credentials for aws eks update-kubeconfig.
+
+
+
+4. Kubernetes Manifest (k8s/deployment.yaml)
+Example:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: springboot-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: springboot-app
+  template:
+    metadata:
+      labels:
+        app: springboot-app
+    spec:
+      containers:
+        - name: springboot-app
+          image: your-dockerhub-username/springboot-app:latest
+          ports:
+            - containerPort: 8080
+
+👉 The sed command replaces image: with the new tag automatically.
+
+
+
+
+---
+
+
+
+
