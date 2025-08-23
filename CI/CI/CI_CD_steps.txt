@@ -1,0 +1,151 @@
+Steps to Implement
+
+1. Prepare GitHub Repo
+
+Your Spring Boot repo should have:
+
+pom.xml (Maven build).
+
+Dockerfile (to build the Docker image).
+
+buildspec.yml (to tell CodeBuild how to build/test/package).
+
+
+Example Dockerfile:
+
+FROM openjdk:17-jdk-slim
+WORKDIR /app
+COPY target/*.jar app.jar
+ENTRYPOINT ["java","-jar","/app/app.jar"]
+
+Example buildspec.yml:
+
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto17
+  pre_build:
+    commands:
+      - echo Logging in to Docker Hub...
+      - echo $DOCKER_HUB_PASSWORD | docker login -u $DOCKER_HUB_USERNAME --password-stdin
+  build:
+    commands:
+      - echo Build started on `date`
+      - mvn clean install -DskipTests=false   # Run tests
+      - echo Building Docker image...
+      - docker build -t $DOCKER_HUB_USERNAME/springboot-app:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+  post_build:
+    commands:
+      - echo Pushing Docker image to Docker Hub...
+      - docker push $DOCKER_HUB_USERNAME/springboot-app:$CODEBUILD_RESOLVED_SOURCE_VERSION
+
+artifacts:
+  files:
+    - target/*.jar
+
+🔑 Store DOCKER_HUB_USERNAME and DOCKER_HUB_PASSWORD in AWS Secrets Manager or CodeBuild environment variables (masked).
+
+
+---
+
+2. Create CodeBuild Project
+
+Source: GitHub → "Repository in my GitHub account".
+
+Enable Webhook.
+
+Buildspec: use the one in repo (buildspec.yml).
+
+Environment:
+
+Managed Image: Amazon Linux 2 + Docker installed.
+
+Privileged: ✅ (needed for Docker build).
+
+
+
+
+---
+
+3. Create CodePipeline
+
+Stages:
+
+1. Source Stage → GitHub repo (connect via GitHub App).
+
+
+2. Build Stage → Use your CodeBuild project.
+
+Runs tests + builds JAR + Docker image + pushes to Docker Hub.
+
+
+
+3. Deploy Stage (initially manual):
+
+Can SSH into an EC2 and docker run ....
+
+Later replace with ECS/EKS deployment stage.
+
+
+
+
+
+---
+
+4. Verify End-to-End
+
+Push code to GitHub → Pipeline starts.
+
+CodeBuild runs tests, builds Docker image.
+
+Image appears in Docker Hub.
+
+Run image manually first:
+
+docker pull your-dockerhub-username/springboot-app:<commit-id>
+docker run -p 8080:8080 your-dockerhub-username/springboot-app:<commit-id>
+
+Later automate deploy with ECS/EKS
+
+  1. CodePipeline Service Role
+
+This role is assumed by CodePipeline to orchestrate the pipeline.
+
+Trust policy → codepipeline.amazonaws.com
+
+Permissions (attach managed policies + inline if needed):
+
+AmazonS3FullAccess (for storing pipeline artifacts in S3 bucket)
+
+AWSCodePipelineFullAccess
+
+AWSCodeBuildDeveloperAccess (so pipeline can trigger CodeBuild)
+
+AmazonEC2ContainerRegistryReadOnly (if later using ECR)
+
+
+
+👉 If using GitHub Source, CodePipeline automatically manages webhook creation → you don’t need manual permissions for GitHub.
+
+
+---
+
+🔹 2. CodeBuild Service Role
+
+This role is assumed by CodeBuild project while executing buildspec.yml.
+
+Trust policy → codebuild.amazonaws.com
+
+Permissions:
+
+AmazonS3FullAccess (to read/write pipeline artifacts)
+
+CloudWatchLogsFullAccess (for logs)
+
+AWSCodeBuildAdminAccess (for build execution)
+
+AmazonEC2ContainerRegistryPowerUser (if later pushing to ECR instead of Docker Hub)
+
+Extra for Docker Hub → needs SecretsManagerReadWrite if you store Docker Hub credentials in AWS Secrets Manager
