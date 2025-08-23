@@ -1,30 +1,53 @@
-version: 0.2   # Buildspec schema version
+version: 0.2
+
+env:
+  variables:
+    IMAGE_NAME: springboot-app
+    DOCKER_HUB_USER: your-dockerhub-username
+    DOCKER_HUB_REPO: your-dockerhub-username/springboot-app
+  secrets-manager:
+    DOCKER_HUB_PASS: dockerhub/credentials:password   # Store in Secrets Manager
+    SONAR_TOKEN: sonarqube/credentials:token          # Store SonarQube token in Secrets Manager
 
 phases:
-  install:   # Install phase: setup environment
+  install:
     runtime-versions:
-      java: corretto17   # Use Java 17 for Maven build
-
-  pre_build: # Before actual build starts
+      java: corretto17
+      docker: 20
     commands:
-      - echo Logging in to Docker Hub...
-      - echo $DOCKER_HUB_PASSWORD | docker login -u $DOCKER_HUB_USERNAME --password-stdin
-      # Login to Docker Hub using secrets from env variables
+      - echo "Installing Maven..."
+      - mvn -v
+      - java -version
+      - docker -v
 
-  build:     # Main build phase
+  pre_build:
     commands:
-      - echo Build started on `date`
-      - mvn clean install -DskipTests=false   # Run JUnit tests
-      - echo Building Docker image...
-      - docker build -t $DOCKER_HUB_USERNAME/springboot-app:$CODEBUILD_RESOLVED_SOURCE_VERSION .
-      # Tag the image with Git commit ID
+      - echo "Logging in to Docker Hub..."
+      - echo $DOCKER_HUB_PASS | docker login -u $DOCKER_HUB_USER --password-stdin
+      - echo "Running Unit Tests..."
+      - mvn clean verify
+      - echo "Running SonarQube analysis..."
+      - mvn sonar:sonar \
+          -Dsonar.projectKey=springboot-app \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.login=$SONAR_TOKEN
 
-  post_build: # After build completes
+  build:
     commands:
-      - echo Pushing Docker image to Docker Hub...
-      - docker push $DOCKER_HUB_USERNAME/springboot-app:$CODEBUILD_RESOLVED_SOURCE_VERSION
-      # Push Docker image
+      - echo "Building JAR..."
+      - mvn clean package -DskipTests
+      - echo "Building Docker Image..."
+      - docker build -t $IMAGE_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+      - docker tag $IMAGE_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION $DOCKER_HUB_REPO:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker tag $IMAGE_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION $DOCKER_HUB_REPO:latest
 
-artifacts:   # Optional output artifacts for later stages
+  post_build:
+    commands:
+      - echo "Pushing Docker image to Docker Hub..."
+      - docker push $DOCKER_HUB_REPO:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker push $DOCKER_HUB_REPO:latest
+      - echo "Build completed successfully!"
+
+artifacts:
   files:
-    - target/*.jar   # Upload JAR to S3 for pipeline artifacts
+    - target/*.jar
