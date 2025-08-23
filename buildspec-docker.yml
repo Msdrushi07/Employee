@@ -1,0 +1,30 @@
+version: 0.2   # Buildspec schema version
+
+phases:
+  install:   # Install phase: setup environment
+    runtime-versions:
+      java: corretto17   # Use Java 17 for Maven build
+
+  pre_build: # Before actual build starts
+    commands:
+      - echo Logging in to Docker Hub...
+      - echo $DOCKER_HUB_PASSWORD | docker login -u $DOCKER_HUB_USERNAME --password-stdin
+      # Login to Docker Hub using secrets from env variables
+
+  build:     # Main build phase
+    commands:
+      - echo Build started on `date`
+      - mvn clean install -DskipTests=false   # Run JUnit tests
+      - echo Building Docker image...
+      - docker build -t $DOCKER_HUB_USERNAME/springboot-app:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+      # Tag the image with Git commit ID
+
+  post_build: # After build completes
+    commands:
+      - echo Pushing Docker image to Docker Hub...
+      - docker push $DOCKER_HUB_USERNAME/springboot-app:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      # Push Docker image
+
+artifacts:   # Optional output artifacts for later stages
+  files:
+    - target/*.jar   # Upload JAR to S3 for pipeline artifacts
