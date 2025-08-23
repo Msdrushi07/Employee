@@ -1,151 +1,357 @@
-Steps to Implement
+🔑 Ideal Flow for Spring Boot CI/CD (with quality checks)
 
-1. Prepare GitHub Repo
-
-Your Spring Boot repo should have:
-
-pom.xml (Maven build).
-
-Dockerfile (to build the Docker image).
-
-buildspec.yml (to tell CodeBuild how to build/test/package).
+1. Source Stage → CodePipeline pulls code from GitHub.
+✅ Already handled by pipeline, so CodeBuild gets the repo automatically (no need for checkout in buildspec.yml).
 
 
-Example Dockerfile:
+2. Build Stage (CodeBuild with buildspec.yml)
+Inside buildspec we’ll do:
 
-FROM openjdk:17-jdk-slim
-WORKDIR /app
-COPY target/*.jar app.jar
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+Install dependencies (Java, Maven, Docker, SonarScanner – usually available in CodeBuild standard image).
 
-Example buildspec.yml:
+Run JUnit tests.
+
+Generate Jacoco coverage report.
+
+Run SonarQube analysis.
+
+Build Spring Boot JAR.
+
+Build Docker image with JAR inside.
+
+Push image to Docker Hub.
+
+
+
+
+
+---
+
+✅ Final buildspec.yml
 
 version: 0.2
+
+env:
+  variables:
+    IMAGE_NAME: springboot-app
+    DOCKER_HUB_USER: your-dockerhub-username
+    DOCKER_HUB_REPO: your-dockerhub-username/springboot-app
+  secrets-manager:
+    DOCKER_HUB_PASS: dockerhub/credentials:password   # Store in Secrets Manager
+    SONAR_TOKEN: sonarqube/credentials:token          # Store SonarQube token in Secrets Manager
 
 phases:
   install:
     runtime-versions:
       java: corretto17
+      docker: 20
+    commands:
+      - echo "Installing Maven..."
+      - mvn -v
+      - java -version
+      - docker -v
+
   pre_build:
     commands:
-      - echo Logging in to Docker Hub...
-      - echo $DOCKER_HUB_PASSWORD | docker login -u $DOCKER_HUB_USERNAME --password-stdin
+      - echo "Logging in to Docker Hub..."
+      - echo $DOCKER_HUB_PASS | docker login -u $DOCKER_HUB_USER --password-stdin
+      - echo "Running Unit Tests..."
+      - mvn clean verify
+      - echo "Running SonarQube analysis..."
+      - mvn sonar:sonar \
+          -Dsonar.projectKey=springboot-app \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.login=$SONAR_TOKEN
+
   build:
     commands:
-      - echo Build started on `date`
-      - mvn clean install -DskipTests=false   # Run tests
-      - echo Building Docker image...
-      - docker build -t $DOCKER_HUB_USERNAME/springboot-app:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+      - echo "Building JAR..."
+      - mvn clean package -DskipTests
+      - echo "Building Docker Image..."
+      - docker build -t $IMAGE_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+      - docker tag $IMAGE_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION $DOCKER_HUB_REPO:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker tag $IMAGE_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION $DOCKER_HUB_REPO:latest
+
   post_build:
     commands:
-      - echo Pushing Docker image to Docker Hub...
-      - docker push $DOCKER_HUB_USERNAME/springboot-app:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo "Pushing Docker image to Docker Hub..."
+      - docker push $DOCKER_HUB_REPO:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker push $DOCKER_HUB_REPO:latest
+      - echo "Build completed successfully!"
 
 artifacts:
   files:
     - target/*.jar
 
-🔑 Store DOCKER_HUB_USERNAME and DOCKER_HUB_PASSWORD in AWS Secrets Manager or CodeBuild environment variables (masked).
+
+---
+
+🔎 Explanation of Each Phase
+
+env
+
+Defines image name, Docker Hub repo, credentials from AWS Secrets Manager, and SonarQube token.
+
+This keeps secrets secure.
+
+
+install
+
+Uses AWS CodeBuild managed image (aws/codebuild/standard:6.0 or newer) with Java 17 + Docker 20.
+
+Ensures Java, Maven, Docker available.
+
+
+pre_build
+
+Login to Docker Hub.
+
+Run JUnit tests (mvn clean verify runs tests + Jacoco coverage).
+
+Send code quality results to SonarQube/SonarCloud.
+
+
+build
+
+Build JAR.
+
+Build Docker image with version = commit ID ($CODEBUILD_RESOLVED_SOURCE_VERSION).
+
+Tag image with :latest also.
+
+
+post_build
+
+Push both versioned image and latest to Docker Hub.
+
+Save .jar in CodePipeline artifacts (so deployment stage can use if needed).
+
+
 
 
 ---
 
-2. Create CodeBuild Project
+⚡ Improvements you can add later
 
-Source: GitHub → "Repository in my GitHub account".
+Fail pipeline if test coverage < 80% (jacoco-maven-plugin with thresholds).
 
-Enable Webhook.
+Push image to ECR (instead of Docker Hub) for production deployments.
 
-Buildspec: use the one in repo (buildspec.yml).
+Add a separate Deploy stage to EKS/ECS.
 
-Environment:
 
-Managed Image: Amazon Linux 2 + Docker installed.
 
-Privileged: ✅ (needed for Docker build).
+---
+
+👉 This flow is production-grade:
+
+✅ Unit tests + coverage
+
+✅ SonarQube integration
+
+✅ Artifact (.jar)
+
+✅ Docker image in registry
+
+
+
+---
+
+Perfect 👍 Rushi, let’s make your Spring Boot + Maven project fully ready for testing, coverage, and SonarQube.
+
+Here’s the pom.xml configuration for:
+
+1. ✅ JUnit 5 tests
+
+
+2. ✅ JaCoCo for code coverage
+
+
+3. ✅ SonarQube integration
 
 
 
 
 ---
 
-3. Create CodePipeline
+🔹 Add Plugins in pom.xml
 
-Stages:
+<project>
+  ...
+  <properties>
+    <java.version>17</java.version>
+    <maven.compiler.source>${java.version}</maven.compiler.source>
+    <maven.compiler.target>${java.version}</maven.compiler.target>
+    <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
+    <jacoco.version>0.8.11</jacoco.version>
+  </properties>
 
-1. Source Stage → GitHub repo (connect via GitHub App).
+  <build>
+    <plugins>
+      
+      <!-- Compiler Plugin -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+          <release>${java.version}</release>
+        </configuration>
+      </plugin>
+
+      <!-- JUnit Platform (Surefire) -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <useModulePath>false</useModulePath>
+        </configuration>
+      </plugin>
+
+      <!-- JaCoCo Code Coverage -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco.version}</version>
+        <executions>
+          <!-- Attach JaCoCo agent -->
+          <execution>
+            <id>prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <!-- Generate report after tests -->
+          <execution>
+            <id>report</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+          <!-- Fail build if coverage < 80% -->
+          <execution>
+            <id>check</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <rule>
+                  <element>CLASS</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>0.80</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- SonarQube Scanner -->
+      <plugin>
+        <groupId>org.sonarsource.scanner.maven</groupId>
+        <artifactId>sonar-maven-plugin</artifactId>
+        <version>3.11.0.3922</version>
+      </plugin>
+      
+    </plugins>
+  </build>
+
+  <dependencies>
+    <!-- JUnit 5 -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.11.0</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Mockito (for mocking in unit tests) -->
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>5.13.0</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Spring Boot Test -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
 
 
-2. Build Stage → Use your CodeBuild project.
+---
 
-Runs tests + builds JAR + Docker image + pushes to Docker Hub.
+🔹 What Happens in the Pipeline
+
+mvn clean verify
+
+Runs unit tests (Surefire + JUnit 5).
+
+Generates JaCoCo report (target/site/jacoco/index.html).
+
+Fails build if coverage < 80%.
 
 
+mvn sonar:sonar
 
-3. Deploy Stage (initially manual):
+Uploads test + coverage data to SonarQube/SonarCloud.
 
-Can SSH into an EC2 and docker run ....
-
-Later replace with ECS/EKS deployment stage.
-
+Requires sonar.projectKey, sonar.host.url, and sonar.login (token).
 
 
 
 
 ---
 
-4. Verify End-to-End
+🔹 SonarQube Properties (Optional sonar-project.properties file)
 
-Push code to GitHub → Pipeline starts.
+If you don’t want to pass everything in buildspec.yml, you can add this in project root:
 
-CodeBuild runs tests, builds Docker image.
-
-Image appears in Docker Hub.
-
-Run image manually first:
-
-docker pull your-dockerhub-username/springboot-app:<commit-id>
-docker run -p 8080:8080 your-dockerhub-username/springboot-app:<commit-id>
-
-Later automate deploy with ECS/EKS
-
-  1. CodePipeline Service Role
-
-This role is assumed by CodePipeline to orchestrate the pipeline.
-
-Trust policy → codepipeline.amazonaws.com
-
-Permissions (attach managed policies + inline if needed):
-
-AmazonS3FullAccess (for storing pipeline artifacts in S3 bucket)
-
-AWSCodePipelineFullAccess
-
-AWSCodeBuildDeveloperAccess (so pipeline can trigger CodeBuild)
-
-AmazonEC2ContainerRegistryReadOnly (if later using ECR)
-
-
-
-👉 If using GitHub Source, CodePipeline automatically manages webhook creation → you don’t need manual permissions for GitHub.
+sonar.projectKey=springboot-app
+sonar.projectName=SpringBoot Application
+sonar.java.binaries=target/classes
+sonar.sources=src/main/java
+sonar.tests=src/test/java
+sonar.junit.reportPaths=target/surefire-reports
+sonar.jacoco.reportPaths=target/jacoco.exec
+sonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+sonar.host.url=https://sonarcloud.io
 
 
 ---
 
-🔹 2. CodeBuild Service Role
+📊 Example Build Flow with This Setup
 
-This role is assumed by CodeBuild project while executing buildspec.yml.
+1. Unit tests run → mvn test
 
-Trust policy → codebuild.amazonaws.com
 
-Permissions:
+2. JaCoCo generates coverage → enforces 80% min coverage
 
-AmazonS3FullAccess (to read/write pipeline artifacts)
 
-CloudWatchLogsFullAccess (for logs)
+3. SonarQube analysis → code smells, bugs, vulnerabilities, coverage %
 
-AWSCodeBuildAdminAccess (for build execution)
 
-AmazonEC2ContainerRegistryPowerUser (if later pushing to ECR instead of Docker Hub)
+4. If success → JAR built → Docker image built → Pushed to Docker Hub
 
-Extra for Docker Hub → needs SecretsManagerReadWrite if you store Docker Hub credentials in AWS Secrets Manager
+
+
+
+---
+
+👉 This setup ensures CI/CD = Quality Gate + Deployment.
+
+
+
+
