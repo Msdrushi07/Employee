@@ -1,0 +1,74 @@
+Here’s a clean and production-ready Dockerfile for a Spring Boot application using Java 21 as the base image.
+
+✅ Dockerfile (Java 21, layered JAR, lightweight)
+
+# ---- Stage 1: Build the application ----
+FROM eclipse-temurin:21-jdk AS builder
+
+WORKDIR /app
+COPY . .
+
+# Build using Maven (change if Gradle)
+RUN ./mvnw clean package -DskipTests
+
+# ---- Stage 2: Run the application ----
+FROM eclipse-temurin:21-jre AS runtime
+
+WORKDIR /app
+
+# Copy only the final jar from builder stage
+COPY --from=builder /app/target/*.jar app.jar
+
+# Expose application port (optional)
+EXPOSE 8080
+
+# Run application
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+
+---
+
+⭐ If your Spring Boot application is using Spring Boot 2.3+, you can use layered jars:
+
+FROM eclipse-temurin:21-jre AS runtime
+
+WORKDIR /app
+
+COPY target/*.jar app.jar
+
+RUN java -Djarmode=layertools -jar app.jar extract
+
+ENTRYPOINT ["java", "-cp", "app", "org.springframework.boot.loader.launch.JarLauncher"]
+
+
+---
+
+🔄 If you're using Gradle, replace the build command:
+
+RUN ./gradlew bootJar
+
+
+---
+
+⚡ Best Practices Included
+
+✔ Multi-stage build → smallest possible final image
+✔ Using Temurin Java 21 (LTS)
+✔ Runs as non-root (optional—add if you want)
+✔ Layered jars for faster rebuilds (optional)
+
+
+---
+
+If you want, I can generate:
+
+Dockerfile with non-root user
+
+Dockerfile with distroless Java 21
+
+Dockerfile with Docker Compose
+
+Dockerfile for native image (GraalVM)
+
+
+Just tell me!
