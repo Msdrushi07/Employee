@@ -1,0 +1,9 @@
+try (
+    FileInputStream fis = new FileInputStream("test.txt");
+    BufferedReader br = new BufferedReader(new InputStreamReader(fis))
+) {
+    String line = br.readLine();
+}
+catch (FileNotFoundException | IOException e) {
+    log.error("File operation failed", e);
+}
